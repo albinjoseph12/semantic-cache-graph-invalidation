@@ -1,0 +1,5 @@
+PostgreSQL 16.16 (pgvector/pgvector:pg16, Docker, localhost), asyncpg 0.32.0, run 2026-11-18
+postgres_snapshot_test.py against corrected_semcache-testbed/app/main.py (build_context)
+{'snapshot': False, 'observed_stamp': 2, 'current_stamp': 2}
+{'snapshot': True, 'observed_stamp': 1, 'current_stamp': 2}
+result: both assertions passed (unprotected stamp==current -> stale insertion admitted; snapshot stamp<current -> rejected)

@@ -1,0 +1,63 @@
+# Testbed for "LLM Semantic Caching with Graph-Based Invalidation in Transactional Microservices".
+#
+#   docker compose up -d postgres redis
+#   docker compose run --rm seed
+#   CACHE_MODE=graph-tx docker compose up -d gateway            # none | ttl | flush | graph-cdc | graph-tx
+#   CACHE_MODE=graph-cdc docker compose up -d invalidator        # only for graph-cdc
+#   READ_SHARE=0.75 docker compose run --rm locust
+#   docker compose run --rm monitor
+# or natively:  ./run_benchmark.sh <mode> <read_share> <tau> <rep>   (what produced the paper's measurements)
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment: { POSTGRES_USER: acb, POSTGRES_PASSWORD: acb, POSTGRES_DB: semcache }
+    command: postgres -c max_connections=200 -c shared_buffers=512MB
+    ports: ["5432:5432"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U acb -d semcache"], interval: 2s, timeout: 2s, retries: 30 }
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+  redis:
+    image: redis:7.2
+    command: redis-server --save "" --appendonly no
+    ports: ["6379:6379"]
+  seed:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes: ["./seed:/app"]
+    environment: { SC_DSN: "dbname=semcache user=acb password=acb host=postgres port=5432" }
+    command: sh -c "pip install -q psycopg2-binary && python seed_db.py --products 5000"
+    depends_on: { postgres: { condition: service_healthy } }
+  gateway:
+    build: { context: ./app }
+    environment:
+      CACHE_MODE: ${CACHE_MODE:-graph-tx}
+      TAU: ${TAU:-0.70}
+      TTL_S: ${TTL_S:-60}
+      SC_PG_URL: postgresql://acb:acb@postgres:5432/semcache
+      REDIS_URL: redis://redis:6379/0
+      LLM_TTFT_MS: "500"
+      LLM_TPS: "50"
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 --log-level warning
+    ports: ["8000:8000"]
+    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_started } }
+  invalidator:
+    build: { context: ./app }
+    environment: { SC_PG_URL: postgresql://acb:acb@postgres:5432/semcache, REDIS_URL: redis://redis:6379/0, INVALIDATOR_LOG: /results/invalidator.csv }
+    command: python invalidator.py
+    volumes: ["./results:/results"]
+    depends_on: [gateway]
+  locust:
+    image: locustio/locust:2.32.4
+    working_dir: /mnt/locust
+    volumes: ["./load:/mnt/locust", "./app:/mnt/app", "./results:/mnt/results"]
+    environment: { READ_SHARE: "${READ_SHARE:-0.75}", SC_USERS: "500", SC_DURATION: "120", SC_REQ_LOG: /mnt/results/requests.csv, SC_NAMES: /mnt/locust/product_names.json }
+    command: -f locustfile.py --headless -H http://gateway:8000 --csv /mnt/results/locust --only-summary
+    depends_on: [gateway]
+  monitor:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes: ["./telemetry:/app", "./results:/results"]
+    environment: { SC_DSN: "dbname=semcache user=acb password=acb host=postgres port=5432" }
+    command: sh -c "pip install -q psycopg2-binary && python monitor.py --gateway http://gateway:8000 --duration 125 --out /results/telemetry.csv"
+    depends_on: [gateway]
+volumes:
+  pgdata: {}

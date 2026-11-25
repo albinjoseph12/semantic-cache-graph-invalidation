@@ -1,0 +1,12 @@
+--- a/app/main.py
++++ b/app/main.py
+@@ -298,7 +298,8 @@
+                 else:
+                     hit = row
+         if hit is None:
+-            ctx, versions, context_text = await build_context(conn, keys)
++            async with conn.transaction(isolation="repeatable_read", readonly=True):
++                ctx, versions, context_text = await build_context(conn, keys)
+     if hit is not None:
+         payload = await r.get(f"answer:{hit['id']}")
+         ans = json.loads(payload) if payload else json.loads(hit["answer"])
