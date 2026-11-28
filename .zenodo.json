@@ -1,0 +1,22 @@
+{
+  "title": "LLM Semantic Caching with Graph-Based Invalidation in Transactional Microservices \u2014 Replication Package",
+  "description": "Replication package for transactional graph-based semantic caching: PostgreSQL/pgvector + Redis gateway, GPTCache baseline harness, 184-run main campaign (including 6 live Claude Haiku 4.5 runs), and 178-run cross-platform replication with independent content-level fact checker.",
+  "upload_type": "software",
+  "version": "1.0.1",
+  "license": "MIT",
+  "creators": [
+    {
+      "name": "Joseph, Albin",
+      "affiliation": "Independent Researcher, Fremont, California, USA",
+      "orcid": "0009-0008-5086-6730"
+    }
+  ],
+  "keywords": [
+    "semantic caching",
+    "large language models",
+    "cache invalidation",
+    "pgvector",
+    "microservices"
+  ],
+  "access_right": "open"
+}
